@@ -88,13 +88,27 @@ Instructions:
 - Ensure that the generated SQL queries are syntactically correct.
 """
 
-prompt2 ="""
-       You are a friendly and persuasive mobile phone salesman with access to a database of various smartphones,
-       their features, and prices. Your goal is to interact with customers,
-       provide detailed information about the smartphones, and try to sell them at the best possible price. 
-       Be professional and polite, but also act as a skilled negotiator who can adjust the price within certain limits based on the customer's sentiment and responses.
-       You have to response to user query and talk like a professional salesman
-    """
+prompt2 = """
+You are a friendly and persuasive mobile phone salesman with access to a database of various smartphones,
+their features, and prices. You also have access to the conversation history with the customer, which includes their preferences, previous queries, and negotiation attempts. 
+Your goal is to interact with customers, provide detailed information about the smartphones, and try to sell them at the best possible price. 
+
+Be professional and polite, but also act as a skilled negotiator who can adjust the price within certain limits based on the customer's sentiment and responses.
+Consider the conversation history when responding to the customer, and aim to build rapport while guiding them toward a purchase decision. 
+You should always try to accommodate their requests while maintaining the store's pricing structure.
+"""
+
+
+prompt3 = """
+You are an intent classifier. Your task is to classify the given text into one of the following intents: "negotiation" or "query." 
+
+Please return only one of them based on the context of the text provided.
+
+"""
+
+
+
+
 
 # interface code 
 
@@ -107,6 +121,8 @@ st.header('Gemini app for price negotiation')
 
 if "message" not in st.session_state:
     st.session_state.message = []
+    st.session_state.data = []
+
 
 
 for message in st.session_state.message:
@@ -117,26 +133,53 @@ for message in st.session_state.message:
 
 if prompt := st.chat_input("What is up?"):
     
-    # Add user message to chat history
+    
     st.session_state.message.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
+    
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    query = get_gemin_response(prompt1,prompt)
-    temp = read_sql_query(query)
-    plain_text = sql_result_to_text(column_names,temp)
+    intent = get_gemin_response(prompt3,prompt)
+    st.write(f"Detected intent: {intent}") 
 
-    question_for_llm = (
+    if intent=='query':
+        query = get_gemin_response(prompt1,prompt)
+        temp = read_sql_query(query)
+        plain_text = sql_result_to_text(column_names,temp)
+        st.session_state.data.append({'data':plain_text})
+        question_for_llm = (
         f"The customer is asking: {prompt}\n\n"
         f"Here are the available options:\n{plain_text}\n\n"
         "Please provide a helpful and persuasive response."
-    )
+        )
 
-    assistant_response = get_gemin_response(prompt2,question_for_llm)
-    st.session_state.message.append({"role": "assistant", "content": assistant_response})
-    with st.chat_message("assistant"):
-        st.markdown(assistant_response)
+        assistant_response = get_gemin_response(prompt2,question_for_llm)
+        st.session_state.message.append({"role": "assistant", "content": assistant_response})
+        with st.chat_message("assistant"):
+            st.markdown(assistant_response)
+    
+    elif intent == 'negotiation':
+        
+        if st.session_state.data:
+            data = st.session_state.data[-1]['data']
+            st.write(f"Negotiating with data: {data}")
+            print(data)
+            print("\n")
+            assistant_response = get_gemin_response(prompt2, data)
+            st.session_state.message.append({"role": "assistant", "content": assistant_response})
+            
+            
+            with st.chat_message("assistant"):
+                st.markdown(assistant_response)
+        else:
+            
+            error_message = "No previous data available for negotiation."
+            st.session_state.message.append({"role": "assistant", "content": error_message})
+            with st.chat_message("assistant"):
+                st.markdown(error_message)
+
+
+
     
 
 
@@ -145,6 +188,4 @@ if prompt := st.chat_input("What is up?"):
 
     
     
-
-
 
